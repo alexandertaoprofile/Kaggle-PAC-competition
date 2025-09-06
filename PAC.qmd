@@ -1,0 +1,1260 @@
+```{r}
+library(dplyr)   #read the analysis data and scoring data to R
+data= read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/analysisData.csv')
+data[1:20,]
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+scoringData
+```
+
+```{r}
+data|>   #only looking at numeric data first for simplicity at the first stage, add more variables later
+  select(is.numeric) ->data_num
+data_num
+scoringData|>
+  select(is.numeric) ->scoringData_num 
+
+
+for (col in names(data_num)) {
+  col_mean <- mean(data_num[[col]], na.rm = TRUE)  # Calculate the mean of the column
+  data_num[[col]][is.na(data_num[[col]])] <- col_mean  # Replace NAs with the mean
+}
+
+for (col in names(scoringData)) {
+  col_mean <- mean(scoringData[[col]], na.rm = TRUE)  # Calculate the mean of the column
+  scoringData[[col]][is.na(scoringData[[col]])] <- col_mean  # Replace NAs with the mean
+}
+#not the best way to impute data, but only for simplicity at first stage
+
+```
+
+```{r}
+model1 = lm(price ~ daysonmarket,data)    #first model, test trial
+summary(model1)
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+pred1=predict(model1,newdata=scoringData)
+
+
+submissionFile1 = data.frame(id = scoringData$id, price = pred1)
+submissionFile1
+write.csv(submissionFile1, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission1.csv',row.names = F)
+
+```
+
+```{r}
+#stage1: check all models learned in class with simple variables first to determine the best model for this dataset.
+library(dplyr);library(tidyr);library(ggplot2)
+
+
+model2 = lm(price ~ .,data_num)
+summary(model2)  #checking significant numeric variables based on the p-value
+
+
+cor=cor(data_num);
+
+data_num |>
+  pivot_longer(1:18,names_to = 'var',values_to = 'values') |>
+  group_by(var)|>
+  summarize(r = round(cor(price, values),2), p = round(cor.test(price, values)$p.value, 4))|>
+  arrange(desc(abs(r)))
+
+
+corMatrix = as.data.frame(cor(data_num[,-19]))
+corMatrix$var1 = rownames(corMatrix)
+
+corMatrix |>
+  gather(key=var2,value=r,1:18)|>
+  arrange(var1,desc(var2))|>
+  ggplot(aes(x=var1,y=reorder(var2, order(var2,decreasing=F)),fill=r))+
+  geom_tile()+
+  geom_text(aes(label=round(r,2)),size=3)+
+  scale_fill_gradientn(colours = c('#d7191c','#fdae61','#ffffbf','#a6d96a','#1a9641'))+
+  theme(axis.text.x=element_text(angle=75,hjust = 1))+xlab('')+ylab('')  #checking multicolinearity based on the correlation, multiple highly correlated variables detected.
+```
+
+```{r}
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+pred2=predict(model2,newdata=scoringData)
+
+
+submissionFile2 = data.frame(id = scoringData$id, price = pred2)
+submissionFile2
+write.csv(submissionFile2, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission2.csv',row.names = F) #model2, based on all numeric variables
+```
+
+```{r}
+model3 = lm(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,data)  #extract all numeric variables with siginificant p-value
+summary(model3)
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+pred3=predict(model3,newdata=scoringData)
+
+submissionFile3 = data.frame(id = scoringData$id, price = pred3)
+submissionFile3
+write.csv(submissionFile3, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission3.csv',row.names = F)
+```
+
+```{r}
+model4 = lm(price ~ length_inches+width_inches+height_inches+maximum_seating+year,data)    #ignore all variables with NA data and non-significant data
+summary(model4)
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+pred4=predict(model4,newdata=scoringData)
+
+submissionFile4 = data.frame(id = scoringData$id, price = pred4)
+submissionFile4
+write.csv(submissionFile4, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission4.csv',row.names = F)
+```
+
+```{r}
+data_nona=na.omit(data)
+data_nona
+
+model5 = lm(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,data_nona)  #ignore all variables with NA data
+summary(model5)
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+pred5=predict(model5,newdata=scoringData)
+
+submissionFile5 = data.frame(id = scoringData$id, price = pred5)
+submissionFile5
+write.csv(submissionFile5, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission3.csv',row.names = F)
+```
+```{r}
+library(dplyr)
+library(caret)
+#replace NA value with mean
+#final version of regression model. imputed NA with mean, numeric variables
+data|>
+  select(is.numeric) ->data_num
+
+for (col in names(data_num)) {
+  col_mean <- mean(data_num[[col]], na.rm = TRUE)  # Calculate the mean of the column
+  data_num[[col]][is.na(data_num[[col]])] <- col_mean  # Replace NAs with the mean
+}
+data_num
+
+for (col in names(scoringData)) {
+  col_mean <- mean(scoringData[[col]], na.rm = TRUE)  # Calculate the mean of the column
+  scoringData[[col]][is.na(scoringData[[col]])] <- col_mean  # Replace NAs with the mean
+}
+
+scoringData
+
+model6 = lm(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,data_num)
+summary(model6)
+
+pred6=predict(model6,newdata=scoringData)
+
+submissionFile6 = data.frame(id = scoringData$id, price = pred6)
+submissionFile6
+write.csv(submissionFile6, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission6.csv',row.names = F)
+
+
+```
+
+```{r}
+data_num
+scoringData
+#tuned tree method with simple variables
+#tuning process
+tuneGrid = expand.grid(cp = seq(0,0.1,0.0001))
+library(caret)
+trControl = trainControl(method = 'cv',number = 5)
+set.seed(1031)
+tree_cv = train(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,
+               data = data_num,
+               method = 'rpart',
+               trControl = trControl, 
+               tuneGrid = tuneGrid)
+
+plot(tree_cv)
+tree_cv$bestTune
+
+```
+
+```{r}
+library(dplyr)
+library(caret)
+#tree method
+cvtree_model7 = rpart(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,
+               data = data_num, 
+               method = 'anova', 
+               cp = tree_cv$bestTune)
+
+
+pred7=predict(cvtree_model7,newdata=scoringData)
+submissionFile7 = data.frame(id = scoringData$id, price = pred7)
+submissionFile7
+write.csv(submissionFile7, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission7.csv',row.names = F)
+```
+
+```{r}
+#bag method with simple variables
+library(ipred)
+set.seed(1031) 
+bag = bagging(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,
+              data = data_num, 
+              nbagg = 1000)
+
+pred8=predict(bag,newdata=scoringData)
+
+submissionFile8 = data.frame(id = scoringData$id, price = pred8)
+submissionFile8
+write.csv(submissionFile8, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission8.csv',row.names = F)
+```
+
+```{r}
+#tuned random forest with simple variables
+#when tuning, start with larger range and interval, then get smaller
+#tuning process
+library(randomForest)
+trControl = trainControl(method = 'cv', number = 5)
+tuneGrid = expand.grid(mtry = 1:13)
+set.seed(1031)
+forest_cv = train(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,
+                  data = data_num, 
+                  method = 'rf', 
+                  trControl = trControl, 
+                  tuneGrid = tuneGrid, 
+                  ntree = 200)
+forest_cv$bestTune$mtry
+
+
+# trControl = trainControl(method = 'cv', number = 5)
+# tuneGrid = expand.grid(mtry = 1:ncol(data)-1)
+# set.seed(500)
+# forest_cv = train(price~., 
+#                   data = data_num, 
+#                   method = 'rf', 
+#                   trControl = trControl, 
+#                   tuneGrid = tuneGrid, 
+#                   ntree = 1000)
+# forest_cv$bestTune$mtry
+```
+
+
+```{r}
+#pure random forest method
+library(randomForest)
+set.seed(1031)
+cvforest = randomForest(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+                        data_num, 
+                        mtry = 13, #13 might not be the best mtry
+                        ntree = 200) #change to 1000 later
+ 
+pred9=predict(cvforest,newdata=scoringData)
+
+submissionFile9 = data.frame(id = scoringData$id, price = pred9)
+submissionFile9
+write.csv(submissionFile9, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission9.csv',row.names = F)
+```
+
+```{r}
+#the tuning process for random forest was extremely time consuming -over 10 hours. Had to arbitrarily pick mtry number to manully tune the model
+library(randomForest)
+cvforest = randomForest(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+                        data_num, 
+                        mtry = 8, #8 might not be the best mtry
+                        ntree = 200) #change to 1000 later
+ 
+pred12=predict(cvforest,newdata=scoringData)
+
+submissionFile12 = data.frame(id = scoringData$id, price = pred12)
+submissionFile12
+write.csv(submissionFile12, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission12.csv',row.names = F)
+```
+
+
+```{r}
+#tuned forest ranger
+#tuning process
+library(caret)
+trControl=trainControl(method="cv",number=5)  
+tuneGrid = expand.grid(mtry=1:13, 
+                       splitrule = c('variance','extratrees','maxstat'), 
+                       min.node.size =c(2,5,10,15,20,25))
+
+tuned_ranger = train(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating,
+                data=data_num,
+                method="ranger",
+                num.trees=200,
+                trControl=trControl,
+                tuneGrid=tuneGrid)
+
+```
+
+
+```{r}
+tuned_ranger
+tuned_ranger$bestTune
+tuned_ranger$bestTune$mtry
+tuned_ranger$bestTune$splitrule
+tuned_ranger$bestTune$min.node.size  #tuning results
+
+# pred11=predict(forest_ranger_tuned,data=scoringData)$predictions
+# submissionFile11 = data.frame(id = scoringData$id, price = pred11)
+# submissionFile11
+# write.csv(submissionFile11, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission11.csv',row.names = F)
+```
+
+
+```{r}
+#tuned forest ranger model
+library(ranger)
+forest_ranger_tuned = 
+  ranger(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+               data = data_num,
+               num.tree=100,
+               mtry=tuned_ranger$bestTune$mtry, 
+               min.node.size = tuned_ranger$bestTune$min.node.size, 
+               splitrule = tuned_ranger$bestTune$splitrule)
+
+forest_ranger_tuned
+
+pred15=predict(forest_ranger_tuned,data=scoringData)$predictions
+submissionFile15=data.frame(id = scoringData$id, price = pred15)
+submissionFile15
+write.csv(submissionFile15, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission15.csv',row.names = F)
+```
+
+```{r}
+#a continuation of tuned ranger method since it works the best so far
+library(ranger)
+forest_ranger_tuned = 
+  ranger(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+               data = data_num,
+               num.tree=100,
+               mtry=8, 
+               min.node.size = 5, 
+               splitrule = 'variance')
+
+forest_ranger_tuned
+
+predcheck=predict(forest_ranger_tuned,data=scoringData)$predictions
+checktunedvalue=data.frame(id = scoringData$id, price = predcheck)
+
+pred=predict(forest_ranger_tuned,data=data_num)$predictions
+check=data.frame(id = scoringData$id, price = pred)
+checktunedvalue
+check
+
+rmse_test_trial = sqrt(mean((pred - data_num$price)^2)); rmse_test_trial
+# write.csv(checktunedvalue, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission15.csv',row.names = F)
+# not getting improvement, move forward
+```
+
+
+
+```{r}
+#boost model, tuned gbm
+library(gbm)
+library(caret)
+set.seed(1031)
+
+#tuning process
+trControl = trainControl(method="cv",number=5)
+tuneGrid = expand.grid(n.trees = 200, 
+                       interaction.depth = c(1,2,3),
+                       shrinkage = (1:100)*0.001,
+                       n.minobsinnode=c(5,10,15))
+
+garbage = capture.output(cvModel <- train(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+                                          data=data_num,
+                                          method="gbm",
+                                          trControl=trControl, 
+                                          tuneGrid=tuneGrid))
+set.seed(1031)
+#tuned gbm model
+cvboost = gbm(price ~ fuel_tank_volume_gallons+highway_fuel_economy+city_fuel_economy+length_inches+width_inches+height_inches+engine_displacement+horsepower+maximum_seating+year+mileage+owner_count+seller_rating, 
+              data=data_num,
+              distribution="gaussian",
+              n.trees=500,
+              interaction.depth=cvModel$bestTune$interaction.depth,
+              shrinkage=cvModel$bestTune$shrinkage,
+              n.minobsinnode = cvModel$bestTune$n.minobsinnode)
+cvboost
+cvModel
+cvModel$bestTune$interaction.depth
+pred_train = predict(cvboost, newdata=scoringData)
+```
+
+```{r}
+submissionFile14 = data.frame(id = scoringData$id, price = pred_train)
+submissionFile14
+write.csv(submissionFile14, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission14.csv',row.names = F)
+```
+
+```{r}
+#xgboost model
+library(ISLR2)
+
+data_num
+scoringData_num
+
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_num,
+                        varlist = names(data_num)[2:18])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+```
+
+```{r}
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_num,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_num,
+                     varRestriction = newvars)
+train_input
+```
+```{r}
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_num$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration #the best iternation is 10000, meaning the actual iteration is more than 10000. 
+#tried tuning the nrounds to 50000, derived the best_iteration to be 22000. Didn't output best result. 
+```
+
+```{r}
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+pred18train=data.frame(id = data_num$id, price = pred_train)
+pred18train
+
+
+check=data.frame(true=data_num$price,pred=pred18train);check
+
+pred18test=data.frame(id = scoringData$id, price = pred_test)
+pred18test 
+#rmse=1507, by far the best model.
+
+#stage2: tuning the xgboost model
+
+#tuning the nround to find the best nround
+library(xgboost); library(caret)
+#set.seed(617)
+tune_nrounds = xgb.cv(data=as.matrix(train_input), 
+                      label = data_num$price,
+                      nrounds=50000,
+                      nfold = 5,
+                      verbose = 0)
+
+ggplot(data=tune_nrounds$evaluation_log, aes(x=iter, y=test_rmse_mean))+
+  geom_point(size=0.4, color='sienna')+
+  geom_line(size=0.1, alpha=0.1)+
+  theme_bw()
+
+# write.csv(pred18test, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission18.csv',row.names = F)
+# check=data.frame(true=data_num$price,pred=pred16);check
+
+```
+
+```{r}
+#confirmed that xgboost is the best model. 
+
+which.min(tune_nrounds$evaluation_log$test_rmse_mean)
+
+library(xgboost)
+xgboost2 = xgboost(data=as.matrix(train_input), 
+                  label = data_num$price,
+                  nrounds=623,
+                  verbose = 0)
+
+pred_train = predict(xgboost2, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost2, 
+               newdata=as.matrix(test_input))
+
+pred19train=data.frame(id = data_num$id, price = pred_train)
+pred19train
+
+
+check=data.frame(true=data_num$price,pred=pred19train);check
+
+pred19test=data.frame(id = scoringData$id, price = pred_test)
+pred19test
+# the min test_rmse_mean doesn't output better result, need to find other tuning method.
+
+```
+
+```{r}
+library(dplyr);library(tidyr)
+
+#next step: re-select variables to use, adding categorical variables in, maybe with higher order terms. stick with xgboost. split train test datasets to save time and reduce overfit.
+
+data_sense_num <- data_num|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,owner_count,seller_rating,price)
+data_sense_num
+
+scoringData_sense_num<-scoringData_num |>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,owner_count,seller_rating)
+scoringData_sense_num
+#first selection of numeric variables with significant p-value 
+```
+
+```{r}
+library(vtreat)
+library(xgboost)
+
+trt = designTreatmentsZ(dframe = data_sense_num,
+                        varlist = names(data_sense_num)[2:14])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_sense_num,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_num,
+                     varRestriction = newvars)
+train_input
+
+data_sense_num
+
+xgboost3 = xgboost(data=as.matrix(train_input), 
+                  label= data_sense_num$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost3$best_iteration
+
+pred_train = predict(xgboost3, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost3, 
+               newdata=as.matrix(test_input))
+
+# pred20train=data.frame(id = data_sense_num$id, price = pred_train)
+# pred20train
+# check=data.frame(true=data_sense_num$price,pred=pred20train);check
+
+pred20test=data.frame(id = scoringData$id, price = pred_test)
+pred20test
+#write.csv(pred20test, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission20.csv',row.names = F)
+#worse than the previous trial, meaning the insignificant variables also helped the rmse.
+```
+
+```{r}
+library(dplyr);library(tidyr)
+data_sense_num <- data_num|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket,price)
+data_sense_num
+scoringData_sense_num<-scoringData_num |>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket)
+scoringData_sense_num
+
+library(vtreat)
+library(xgboost)
+
+trt = designTreatmentsZ(dframe = data_sense_num,
+                        varlist = names(data_sense_num)[2:17])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_sense_num,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_num,
+                     varRestriction = newvars)
+train_input
+
+data_sense_num
+set.seed(999)  #change the seed to reduce bias.
+xgboost4 = xgboost(data=as.matrix(train_input), 
+                  label= data_sense_num$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost4$best_iteration
+
+pred_train = predict(xgboost4, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost4, 
+               newdata=as.matrix(test_input))
+
+# pred20train=data.frame(id = data_sense_num$id, price = pred_train)
+# pred20train
+# check=data.frame(true=data_sense_num$price,pred=pred20train);check
+
+predtest=data.frame(id = scoringData$id, price = pred_test)
+predtest
+# write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission21.csv',row.names = F)
+#comfirmed that more variables are needed
+```
+
+
+```{r}
+#re-select and analyze useful variables
+library(dplyr)
+data= read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/analysisData.csv')
+
+scoringData=read.csv(file='C:/Users/10946/OneDrive/Desktop/columbia/note/scoringData.csv')
+
+#xgboost automatically impute NA values based on documentation, checking this feature
+for (col in names(data)) {
+  col_mean <- mean(data[[col]], na.rm = TRUE)  # Calculate the mean of the column
+  data[[col]][is.na(data[[col]])] <- col_mean  # Replace NAs with the mean
+}
+
+data_sense <- data|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket,owner_count,price)
+
+data_sense
+```
+
+```{r}
+train_num <- train|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket,owner_count,price)
+
+#xgboost documentary states it automatically imputes value, test if it's the case: based on the result, xgboost impute numeric variables with mean and categorical variables with mode. There is no need to impute unless better imputation algorithm.
+data
+data|>
+  select(is.numeric) ->data_num
+data_num
+scoringData|>
+  select(is.numeric) ->scoringData_num
+scoringData_num
+
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_num,
+                        varlist = names(data_num)[2:18])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_num,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_num,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_num$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_num$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_num$price,pred=pred18train);check
+
+predtest=data.frame(id = scoringData$id, price = pred_test)
+predtest
+
+rmse_train_trial = sqrt(mean((pred_train - train_num$price)^2)); rmse_train_trial
+rmse_test_trial = sqrt(mean((pred_test - test_num$price)^2)); rmse_test_trial
+```
+
+```{r}
+#start systematically tuning variables to use
+library(caret)
+set.seed(617) #split test and control
+split = createDataPartition(y = data_sense$price, p = 0.8, list = F,groups = 100)
+train = data_sense[split,]
+test = data_sense[-split,]
+train
+test
+
+
+#record for RMSE of train and test datasets
+
+#18 var       10000n   1543.186 vs 3624.964    RMSE
+#18 variabels 500n     447.6789 vs 3673.123
+#39 variables 500n         1957 vs 3342
+#54 variables 500n      2007.921vs 3383.675   overfitting vs just not enough nrounds?
+
+#the runtime for xgboost heavily depends on the variables (categorical) used. using less n rounds doesn't reduce the runtime by much. 
+#extreme time consuming process, need to find better solution.
+```
+
+```{r}
+#use previous variables to check the train test splits and rmse
+train_num <- train|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket,owner_count,price)
+
+test_num <- test|>
+  select(id,fuel_tank_volume_gallons,highway_fuel_economy,city_fuel_economy,length_inches,width_inches,height_inches,engine_displacement,horsepower,maximum_seating,year,mileage,seller_rating,wheelbase_inches,back_legroom_inches,front_legroom_inches,daysonmarket,owner_count,price)
+
+library(vtreat)
+library(xgboost)
+
+trt = designTreatmentsZ(dframe = train_num,
+                        varlist = names(train_num)[2:18])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = train_num,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = test_num,
+                     varRestriction = newvars)
+
+set.seed(999)
+xgboost_trial = xgboost(data=as.matrix(train_input), 
+                  label= train_num$price,
+                  nrounds=500,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost_trial$best_iteration
+
+pred_train = predict(xgboost_trial, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost_trial, 
+               newdata=as.matrix(test_input))
+
+# predtrain_trial=data.frame(id = train_num$id, price = pred_train)      this is for the excel process, not needed at this point
+# predtrain_trial
+# predtest_trial=data.frame(id = test_num$id, price = pred_test)
+# predtest
+
+rmse_train_trial = sqrt(mean((pred_train - train_num$price)^2)); rmse_train_trial
+# check=data.frame(true=data_sense_num$price,pred=pred20train);check
+
+rmse_test_trial = sqrt(mean((pred_test - test_num$price)^2)); rmse_test_trial
+# it turns out p-value being large doesn't necessary mean it should be excluded, still need to work on it.
+
+library(vtreat)
+library(xgboost)
+library(caret)
+set.seed(617)
+
+data_selection4 #variables chosen 
+scoringData_selection4
+split = createDataPartition(y = data_selection4$price, p = 0.8, list = F,groups = 100)
+train = data_selection4[split,]
+test = data_selection4[-split,]
+train
+test
+
+trt = designTreatmentsZ(dframe = train,
+                        varlist = names(train)[2:54])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = train,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = test,
+                     varRestriction = newvars)
+
+set.seed(999)
+xgboost_trial = xgboost(data=as.matrix(train_input), 
+                  label= train$price,
+                  nrounds=500,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost_trial$best_iteration
+
+pred_train = predict(xgboost_trial, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost_trial, 
+               newdata=as.matrix(test_input))
+
+# predtrain_trial=data.frame(id = train_num$id, price = pred_train)      
+# predtrain_trial
+# predtest_trial=data.frame(id = test_num$id, price = pred_test)
+# predtest
+
+rmse_train_trial = sqrt(mean((pred_train - train$price)^2)); rmse_traint_trial
+# check=data.frame(true=data_sense_num$price,pred=pred20train);check
+
+rmse_test_trial = sqrt(mean((pred_test - test$price)^2)); rmse_test_trial
+
+```
+
+```{r} 
+#first comments about some variables: engine_type maybe able to keep only the # of cylinders and turn it to numeric, similarly to torque and power, the description maybe extracted for key words and length. Don't see color will be affected so exclude for now. major_options can also be attracted for the length and keywords. listed_data might be redundant to year, exclude for now. Not sure if listing color is important. owner_count is too less, but it works when added to the model. is_cpo is too less.
+
+data_firstrun <- data |>  #carefully picked variables for xgboost version 1
+  select(id, make_name, model_name, trim_name, body_type, fuel_tank_volume_gallons, fuel_type, highway_fuel_economy, city_fuel_economy, power, torque, transmission,transmission_display, wheel_system, wheelbase_inches, back_legroom_inches, front_legroom_inches, length_inches, width_inches, height_inches, engine_type, engine_displacement, horsepower, daysonmarket, maximum_seating, year, fleet, frame_damaged, franchise_dealer, franchise_make, has_accidents, isCab, is_cpo, is_new, mileage, owner_count, salvage, seller_rating, price) |>
+  mutate_if(is.character, as.factor)  
+```
+
+```{r}
+library(caret)  #split the datasets, record the result in line 686
+set.seed(617)
+split = createDataPartition(y = data_firstrun$price, p = 0.8, list = F,groups = 100)
+train = data_firstrun[split,]
+test = data_firstrun[-split,]
+train
+test
+
+library(vtreat)
+library(xgboost)
+
+trt = designTreatmentsZ(dframe = train,
+                        varlist = names(train)[2:38])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = train,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = test,
+                     varRestriction = newvars)
+
+set.seed(999)
+xgboost_trial1 = xgboost(data=as.matrix(train_input), 
+                  label= train$price,
+                  nrounds=500,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost_trial1$best_iteration
+
+pred_train = predict(xgboost_trial1, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost_trial1, 
+               newdata=as.matrix(test_input))
+
+# predtrain_trial=data.frame(id = train_num$id, price = pred_train)    
+# predtrain_trial
+# predtest_trial=data.frame(id = test_num$id, price = pred_test)
+# predtest
+
+rmse_train_trial = sqrt(mean((pred_train - train$price)^2)); rmse_train_trial
+# check=data.frame(true=data_sense_num$price,pred=pred20train);check
+rmse_test_trial = sqrt(mean((pred_test - test$price)^2)); rmse_test_trial
+```
+
+
+```{r}
+data_selection1 <- data |> #same datasets as data_firstrun, formally run it with total data
+  select(id, make_name, model_name, trim_name, body_type, fuel_tank_volume_gallons, fuel_type, highway_fuel_economy, city_fuel_economy, power, torque, transmission,transmission_display, wheel_system, wheelbase_inches, back_legroom_inches, front_legroom_inches, length_inches, width_inches, height_inches, engine_type, engine_displacement, horsepower, daysonmarket, maximum_seating, year, fleet, frame_damaged, franchise_dealer, franchise_make, has_accidents, isCab, is_cpo, is_new, mileage, owner_count, salvage, seller_rating, price) |>
+  mutate_if(is.character, as.factor)  
+data_firstrun
+
+scoring_selection1 <- scoringData |>
+  select(id, make_name, model_name, trim_name, body_type, fuel_tank_volume_gallons, fuel_type, highway_fuel_economy, city_fuel_economy, power, torque, transmission,transmission_display, wheel_system, wheelbase_inches, back_legroom_inches, front_legroom_inches, length_inches, width_inches, height_inches, engine_type, engine_displacement, horsepower, daysonmarket, maximum_seating, year, fleet, frame_damaged, franchise_dealer, franchise_make, has_accidents, isCab, is_cpo, is_new, mileage, owner_count, salvage, seller_rating) |>
+  mutate_if(is.character, as.factor)  
+
+
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection1,
+                        varlist = names(data_selection1)[2:38])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection1,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoring_selection1,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection1$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_num$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_num$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData$id, price = pred_test)
+predtest
+
+write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission22.csv',row.names = F)
+# #tuning the nround to find the best nround
+# library(xgboost); library(caret)
+# #set.seed(617)
+# tune_nrounds = xgb.cv(data=as.matrix(train_input), 
+#                       label = data_selection1$price,
+#                       nrounds=2000,
+#                       nfold = 5,
+#                       verbose = 0)
+# 
+# ggplot(data=tune_nrounds$evaluation_log, aes(x=iter, y=test_rmse_mean))+
+#   geom_point(size=0.4, color='sienna')+
+#   geom_line(size=0.1, alpha=0.1)+
+#   theme_bw()
+```
+
+```{r}
+data_selection1 <- data |>
+  select(id, make_name, model_name, trim_name, body_type, fuel_tank_volume_gallons, fuel_type, highway_fuel_economy, city_fuel_economy, power, torque, transmission,transmission_display, wheel_system, wheelbase_inches, back_legroom_inches, front_legroom_inches, length_inches, width_inches, height_inches, engine_type, engine_displacement, horsepower, daysonmarket, maximum_seating, year, fleet, frame_damaged, franchise_dealer, franchise_make, has_accidents, isCab, is_cpo, is_new, mileage, owner_count, salvage, seller_rating, price) |>
+  mutate_if(is.character, as.factor)  
+data_firstrun
+
+scoring_selection1 <- scoringData |>
+  select(id, make_name, model_name, trim_name, body_type, fuel_tank_volume_gallons, fuel_type, highway_fuel_economy, city_fuel_economy, power, torque, transmission,transmission_display, wheel_system, wheelbase_inches, back_legroom_inches, front_legroom_inches, length_inches, width_inches, height_inches, engine_type, engine_displacement, horsepower, daysonmarket, maximum_seating, year, fleet, frame_damaged, franchise_dealer, franchise_make, has_accidents, isCab, is_cpo, is_new, mileage, owner_count, salvage, seller_rating) |>
+  mutate_if(is.character, as.factor)  
+
+
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection1,
+                        varlist = names(data_selection1)[2:38]) #xgboost model with carefully selected 37 variables
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection1,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoring_selection1,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection1$price,
+                  nrounds=1000,  #double-checking that nround from min test_rmse_mean is not accurate
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_num$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_num$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData$id, price = pred_test)
+predtest
+
+write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission23.csv',row.names = F)
+```
+
+```{r}
+library(dplyr)
+#checking second order relationships of  numeric variables
+data|>
+  select(is.numeric) ->data_num
+
+
+data_numsquared <- data_num |>
+  mutate_all(list(squared = ~ .^2))
+
+data_numsquared
+
+modelcheck = lm(price ~.,data_numsquared)
+summary(modelcheck) #checking the p-values for second order variables
+
+data|>      #data tidying process
+  select(!is.numeric,id) ->data_char
+data_char
+
+data_selection2 <- left_join(data_numsquared, data_char, by = "id")
+data_selection2
+
+data_selection3 <-data_selection2|>
+  select(-front_legroom_inches, -back_legroom_inches_squared,-trim_name,-front_legroom_inches_squared, -id_squared, -price_squared,-wheel_system_display,-description,-exterior_color,-interior_color,-major_options, -listed_date, -price, price) |>
+  mutate_if(is.character, as.factor)
+data_selection3   
+# it turns out p-value being large doesn't necessary mean it should be excluded, still need to work on it.
+
+scoringData|>
+  select(is.numeric) ->scoringData_num
+
+scoringData_numsquared <- scoringData_num |>
+  mutate_all(list(squared = ~ .^2))
+
+scoringData|>
+  select(!is.numeric,id) ->scoringData_char
+
+scoringData_selection2 <- left_join(scoringData_numsquared, scoringData_char, by = "id")
+scoringData_selection2
+
+scoringData_selection3 <-scoringData_selection2|>
+  select(-front_legroom_inches, -back_legroom_inches_squared, -trim_name, -front_legroom_inches_squared, -id_squared,-wheel_system_display,-description,-exterior_color,-interior_color,-major_options,-listed_date) |>
+  mutate_if(is.character, as.factor)
+```
+
+```{r}
+data_selection3  #carefully picked variables for xgboost version 3
+scoringData_selection3  
+
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection3,
+                        varlist = names(data_selection3)[2:52])  #xgboost model with carefully selected 51 variables
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection3,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_selection3,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection3$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_selection3$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_selection3$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData_selection3$id, price = pred_test)
+predtest
+
+write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission24.csv',row.names = F)
+```
+
+```{r}
+library(dplyr)  #adding high correlated and insignificant variables to check the rmse
+data_selection4 <-data_selection2|>  #carefully picked variables for xgboost version 4
+  select(-back_legroom_inches_squared, -front_legroom_inches_squared, -id_squared, -price_squared,-wheel_system_display,-description,-exterior_color,-interior_color,-major_options, -listed_date, -price, price) |>
+  mutate_if(is.character, as.factor)
+data_selection4   # it turns out p-value being large doesn't necessary mean it should be excluded, still need to work on it.
+
+scoringData_selection4 <-scoringData_selection2|>
+  select(-back_legroom_inches_squared, -front_legroom_inches_squared, -id_squared,-wheel_system_display,-description,-exterior_color,-interior_color,-major_options,-listed_date) |>
+  mutate_if(is.character, as.factor)
+scoringData_selection4
+```
+
+```{r}
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection4,
+                        varlist = names(data_selection4)[2:54])  #xgboost model with carefully selected 53 variables, this is the actual best prediction based on private dataset.
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection4,
+                      varRestriction = newvars)
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_selection4,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection4$price,
+                  nrounds=10000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_selection4$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_selection4$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData_selection4$id, price = pred_test)
+predtest
+
+write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission25.csv',row.names = F) 
+```
+
+```{r}
+#next step:start improving the imputation method. 
+#problem: couldn't find a systematic way to decide variables, insignificant and high R squared variables seem to improve rmse as well; long runtime in runing xgboost, seeking gpu boost from r xgboost documentation
+
+library(mice)
+library(recipes)
+
+mtcars_mice_ranger = mice::complete(mice(data_numsquared,method = 'rf',seed = 600)) 
+mtcars_mice_randomForest = mice::complete(mice(data_numsquared,method = 'rf',seed = 600,rfPackage='randomForest')) 
+
+library(caret)
+set.seed(617)
+mtcars_caret = predict(preProcess(data_numsquared,
+                                  method = 'bagImpute'),
+                       newdata = data_numsquared)
+data_numsquared
+```
+
+```{r}
+mtcars_mice_randomForest
+data_selection4
+```
+
+```{r}
+library(dplyr)
+scoringData_selection5 <- scoringData_selection4 |>
+  select(-power,-transmission,-listing_color) 
+  
+  
+data_selection5 <- mtcars_mice_randomForest|>
+  select(-power,-transmission,-listing_color) 
+
+scoringData_selection5 #carefully picked variables and imputed with randomforest for xgboost version 5
+data_selection5
+```
+
+```{r}
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection5,
+                        varlist = names(data_selection5)[2:51])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection5,
+                      varRestriction = newvars)
+
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_selection5,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection5$price,
+                  nrounds=14000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_selection5$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_selection5$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData_selection5$id, price = pred_test)
+predtest
+
+write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission27.csv',row.names = F)
+```
+
+```{r}
+library(dplyr)
+#scoringData_selection5
+data_selection5_check <-data_selection5 |>
+  select(is.numeric) 
+
+data_selection5
+model = lm(price ~ .,data_selection5_check)
+summary(model)
+
+
+data_selection6 <-data_selection5 |>
+  select(-wheelbase_inches) 
+
+scoringData_selection6 <-scoringData_selection5 |>
+  select(-wheelbase_inches) 
+
+data_selection6
+scoringData_selection6
+```
+
+
+```{r}
+library(vtreat)
+trt = designTreatmentsZ(dframe = data_selection6,
+                        varlist = names(data_selection6)[2:50])
+
+newvars = trt$scoreFrame[trt$scoreFrame$code%in% c('clean','lev'),'varName']
+newvars
+
+train_input = prepare(treatmentplan = trt, 
+                      dframe = data_selection6,
+                      varRestriction = newvars)
+
+test_input = prepare(treatmentplan = trt, 
+                     dframe = scoringData_selection6,
+                     varRestriction = newvars)
+library(xgboost)
+xgboost = xgboost(data=as.matrix(train_input), 
+                  label = data_selection6$price,
+                  nrounds=14000,
+                  verbose = 0,
+                  early_stopping_rounds = 100)
+xgboost$best_iteration
+
+plot(xgboost$evaluation_log)
+
+pred_train = predict(xgboost, 
+               newdata=as.matrix(train_input))
+
+pred_test = predict(xgboost, 
+               newdata=as.matrix(test_input))
+
+predtrain=data.frame(id = data_selection6$id, price = pred_train)
+predtrain
+
+check=data.frame(true=data_selection6$price,pred=predtrain);check
+
+predtest=data.frame(id = scoringData_selection6$id, price = pred_test)
+predtest
+
+# write.csv(predtest, 'C:/Users/10946/OneDrive/Desktop/columbia/note/pac/trial_submission28.csv',row.names = F)
+```
+
+```{r}
+
+```
+
