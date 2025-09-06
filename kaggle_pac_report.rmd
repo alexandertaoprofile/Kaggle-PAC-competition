@@ -269,3 +269,4 @@ Throughout the project, a few imperfections were identified, and they would be a
 -   **Redundancy and irrelevant variables analysis:** Taking a closer look at the influence of redundant variables, such as 'Listed_date,' which might include duplicate information already present in 'year', and 'power' which might duplicate information already present in 'horsepower' etc. Some variables such as 'color' seem to be irrelevant information, however should be systematically confirmed to avoid mistakes.
 
 -   **GPU-boost Feature:** Utilizing GPU-boost features available both online and in R documentation could significantly reduce the run-time of the xgboost model, thanks to CUDA.
+
