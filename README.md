@@ -25,3 +25,6 @@ Data Exploration: This includes initial data exploration, identifying missing va
 Model Training: Scripts for training models, including XGBoost and deep learning models (TensorFlow/PyTorch).
 Feature Engineering: Techniques used for handling missing data, encoding categorical features, and generating new features.
 Model Tuning: Hyperparameter tuning, cross-validation, and model evaluation using various approaches.
+
+Acknowledgments
+Kaggle for providing the datasets and the competition platform.
